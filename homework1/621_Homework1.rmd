@@ -1,0 +1,372 @@
+---
+title: DATA 621 Homework1
+author: Seung Min Song
+output:  
+  html_document:
+    toc: true
+    toc_float: true
+    show_toggle: true
+  pdf_document: default
+  includes:
+  in_header: header.html
+css: ./lab.css
+highlight: pygments
+theme: cerulean
+toc: true
+toc_float: true
+linkcolor: blue
+date: "2023-2-26"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(infer)
+library(magrittr)
+library(cowplot)
+library(corrplot)
+library(GGally)
+library(plotly)
+options(warn=-1)
+```
+
+
+## 1. DATA EXPLORATION
+
+### 1.1 Overview
+The moneyball-training-data contains 17 columns(INDEX, TARGET_WINS,	TEAM_BATTING_H, TEAM_BATTING_2B, TEAM_BATTING_3B,	TEAM_BATTING_HR, TEAM_BATTING_BB,	TEAM_BATTING_SO, TEAM_BASERUN_SB, TEAM_BASERUN_CS, TEAM_BATTING_HBP, TEAM_PITCHING_H, TEAM_PITCHING_HR, TEAM_PITCHING_BB, TEAM_PITCHING_SO, TEAM_FIELDING_E,	TEAM_FIELDING_DP) and 2276 rows. This is an observational study. The data set is a quantitative data set and all variables are independent variables.
+
+Load GitHub moneyball-training-data and moneyball-evaluation-data CSV file to RStudio. 
+
+```{r read-data, echo=FALSE}
+# Road data
+dftrain <- data.table::fread( "https://raw.githubusercontent.com/seung-m1nsong/621/main/homework1/moneyball-training-data.csv")
+dfeval <- data.table::fread( "https://raw.githubusercontent.com/seung-m1nsong/621/main/homework1/moneyball-evaluation-data.csv")
+```
+
+### 1.2 Summary
+```{r summary-data, echo=FALSE}
+summary(dftrain)
+```
+
+The mean and median of the **TEAM_BATTING_H**, **TEAM_BATTING_2B**, **TEAM_BATTING_3B**, **TEAM_BATTING_HR**, **TEAM_BATTING_BB**, **TEAM_BATTING_SO**, **TEAM_BASERUN_SB**, **TEAM_BASERUN_CS**, **TEAM_PITCHING_HR**, **TEAM_PITCHING_HR**, **TEAM_FIELDING_DP** variables are also close to each other, indicating that these variables also have a roughly normal distribution.
+
+The median value of the **TEAM_BATTING_HBP**, **TEAM_PITCHING_H**, **TEAM_PITCHING_SO**, **TEAM_FIELDING_E** are much lower than the mean value. This indicates that the distribution of this variable is positively skewed and there could be some outliers.
+
+
+```{r hist-dta, echo=FALSE}
+ggplot(data = dftrain %>% select(-INDEX) %>% gather(variable, value), aes(x = value)) +
+  geom_density(fill = 'skyblue') +
+  facet_wrap(~ variable, scales = 'free')
+```
+
+### 1.3 Box Plot of the data
+```{r boxplot-data, echo=FALSE}
+par(mfrow=c(1,4),
+          c(1,4), 
+          c(1,4),
+          c(1,4))
+boxplot(dftrain$TARGET_WINS,col = "orange", main="TARGET_WINS")
+boxplot(dftrain$TEAM_BATTING_H,col = "orange", main="TEAM_BATTING_H")
+boxplot(dftrain$TEAM_BATTING_2B, col = "orange",main="TEAM_BATTING_2B")
+boxplot(dftrain$TEAM_BATTING_3B, col = "orange", main="TEAM_BATTING_3B")
+
+boxplot(dftrain$TEAM_BATTING_HR, col = "orange", main="TEAM_BATTING_HR")
+boxplot(dftrain$TEAM_BATTING_BB, col = "orange", main="TEAM_BATTING_BB")
+boxplot(dftrain$TEAM_BATTING_HBP, col = "orange", main="TEAM_BATTING_HBP")
+boxplot(dftrain$TEAM_BATTING_SO, col = "orange", main="TEAM_BATTING_SO")
+
+boxplot(dftrain$TEAM_BASERUN_SB, col = "orange", main="TEAM_BASERUN_SB")
+boxplot(dftrain$TEAM_BASERUN_CS, col = "orange", main="TEAM_BASERUN_CS")
+boxplot(dftrain$TEAM_FIELDING_E, col = "orange", main="TEAM_FIELDING_E")
+boxplot(dftrain$TEAM_FIELDING_DP, col = "orange", main="TEAM_FIELDING_DP")
+
+boxplot(dftrain$TEAM_PITCHING_BB, col = "orange", main="TEAM_PITCHING_BB")
+boxplot(dftrain$TEAM_PITCHING_H, col = "orange", main="TEAM_PITCHING_H")
+boxplot(dftrain$TEAM_PITCHING_HR, col = "orange", main="TEAM_PITCHING_HR")
+boxplot(dftrain$TEAM_PITCHING_SO, col = "orange", main="TEAM_PITCHING_SO")
+```
+
+### 1.4 Correlation
+
+```{r cor-data, echo=FALSE}
+# Compute correlation matrix with NA values removed
+cor_matrix <- cor(dftrain[,2:17], use = "pairwise.complete.obs")
+print(cor_matrix)
+```
+
+```{r corrplot-data, echo=FALSE}
+corrplot(cor_matrix, method="circle", type="lower")
+```
+
+The table shows the Pearson's correlation coefficients between different baseball statistics. The values in the table indicate the strength and direction of the linear relationship between the two variables.
+
+For example, the value of -0.10993705 between TARGET_WINS and TEAM_PITCHING_H indicates that there is a weak negative linear relationship between the two variables. This means that as the number of TEAM_PITCHING_H increases, the number of TARGET_WINS is likely to decrease, but the relationship is weak.
+
+There is a moderate negative correlation (-0.635566946) between "TEAM_BATTING_3B" and "TEAM_BATTING_HR". This means that as the number of "TEAM_BATTING_3B" increases, the number of "TEAM_BATTING_HR" is likely to decrease.
+
+On the other hand, the value of 0.96937140 between TEAM_BATTING_HR and TEAM_PITCHING_HR indicates that there is a strong positive linear relationship between the two variables. This means that as the number of TEAM_BATTING_HR increases, the number of TEAM_PITCHING_HR is also likely to increase, and the relationship is strong.
+
+### 1.5 Missing Data
+
+It is always important to consider the context and characteristics of the data before deciding on the best approach to handle missing values. Column named **BATTING_SO**, **BASERUN_SB**, **BASERUN_CS**, **BATTING_HBP**, **PITCHING_SO**, **FIELDING_DP** has missing data. In general, if the data is not normally distributed and there are outliers, the median is a good choice. If the data is normally distributed, the mean is a good choice. 
+
+
+## 2. DATA PREPARATION
+
+
+### 2.1 Missing Data
+I replaced **BATTING_HBP** and **FIELDING_DP** with mean because it is normally distributed and **BATTING_SO**, **BASERUN_SB**, and **BASERUN_CS** with median because it is not normally distributed.
+
+The presence of missing values (NA's) can also affect the distribution of the data and correlation calculation. 
+
+```{r median-data, echo=FALSE}
+#Use is.na()function to exclude NA value. After that calculate median for each variables.
+
+TEAM_BASERUN_SB_median<- dftrain %>%
+                filter(!is.na(TEAM_BASERUN_SB)) %>%
+                summarise(TEAM_BASERUN_SB_median = median(TEAM_BASERUN_SB))
+
+TEAM_BATTING_SO_median<- dftrain %>%
+                filter(!is.na(TEAM_BATTING_SO)) %>%
+                summarise(TEAM_BATTING_SO_median = median(TEAM_BATTING_SO))
+
+TEAM_BASERUN_CS_median<- dftrain %>%
+                filter(!is.na(TEAM_BASERUN_CS)) %>%
+                summarise(TEAM_BASERUN_CS_median = median(TEAM_BASERUN_CS))
+
+TEAM_PITCHING_SO_median<- dftrain %>%
+                filter(!is.na(TEAM_PITCHING_SO)) %>%
+                summarise(TEAM_PITCHING_SO_median = median(TEAM_PITCHING_SO))
+
+dftrain[is.na(dftrain$TEAM_BASERUN_SB), "TEAM_BASERUN_SB"] <- median(dftrain$TEAM_BASERUN_SB, na.rm = TRUE)
+dftrain[is.na(dftrain$TEAM_BATTING_SO), "TEAM_BATTING_SO"] <- median(dftrain$TEAM_BATTING_SO, na.rm = TRUE)
+dftrain[is.na(dftrain$TEAM_BASERUN_CS), "TEAM_BASERUN_CS"] <- median(dftrain$TEAM_BASERUN_CS, na.rm = TRUE)
+dftrain[is.na(dftrain$TEAM_PITCHING_SO), "TEAM_PITCHING_SO"] <- median(dftrain$TEAM_PITCHING_SO, na.rm = TRUE)
+```
+
+```{r avg-data, echo=FALSE}
+#Use is.na()function to exclude NA value. After that calculate avg for each variables.
+
+TEAM_BATTING_HBP_avg<- dftrain %>%
+                filter(!is.na(TEAM_BATTING_HBP)) %>%
+                summarise(TEAM_BASERUN_SB_avg = mean(TEAM_BATTING_HBP))
+
+TEAM_FIELDING_DP_avg<- dftrain %>%
+                filter(!is.na(TEAM_FIELDING_DP)) %>%
+                summarise(TEAM_FIELDING_DP_avg = mean(TEAM_FIELDING_DP))
+
+
+dftrain[is.na(dftrain$TEAM_BATTING_HBP), "TEAM_BATTING_HBP"] <- mean(dftrain$TEAM_BATTING_HBP, na.rm = TRUE)
+dftrain[is.na(dftrain$TEAM_FIELDING_DP), "TEAM_FIELDING_DP"] <- mean(dftrain$TEAM_FIELDING_DP, na.rm = TRUE)
+
+```
+
+### 2.2 Drop and Replace
+Column **index** and **TEAM_** from column name is unnecessary.  
+
+
+```{r drop-data, echo=FALSE}
+# Drop the INDEX column - this won't be useful
+dftrain <- subset(dftrain, select = -INDEX)
+```
+
+```{r remove-data, echo=FALSE}
+# Remove **TEAM_** from column names
+names(dftrain) <- names(dftrain) %>% 
+  str_replace_all('TEAM_', '')
+
+names(dfeval) <- names(dfeval) %>% 
+  str_replace_all('TEAM_', '')
+```
+
+
+### 2.3 Create flags to suggest if a variable was missing
+
+Need to be do done
+```{r flag-data, echo=FALSE}
+
+```
+
+### 2.4 New Variables
+
+After all, in baseball, if you score less points and score more points, you have a higher chance of winning. That's why I paid attention to the fact that the more on-base and the more long hits, the more points you score.
+From a pitcher's point of view, you'd think the opposite. The less on-base and the fewer extra hits, the higher the odds of scoring fewer runs.
+
+For a pitcher, striking out is the surest way to get an out. If you strike out 3 times in a row without sacrificing bases, you can score no runs. The important factor is clear. The more you strike out, the less likely you are to score. However, a lot of strikeouts doesn't necessarily mean less points, and even if you have a lot of strikeouts, if you get on base a lot and catch a lot of long hits, the probability of scoring goes up.
+
+WHIP is an indicator of a pitcher's stability. The reason the pitcher's stability is important is that even if the opposing team loses points, if our team's pitchers give up a lot of points, we can't win. However, going on base due to a fielding error does not affect WHIP.
+
+Even if risk management ability, bases loaded operation, rapid control ability, command, etc. are all subordinated, WHIP does not represent 100% of the pitcher's ability in the eyes of sabermetry. This is because whether you give up a hit or hit a home run counts as one on base.
+
+For this reason, Strikeout rate and Walks + Hits per Inning Pitched (WHIP) were additionally calculated.
+
+
+* Based on 2022 data provided by https://www.teamrankings.com/mlb/stat/plate-appearances. An average plate appearances for one team is **6167**.
+  + On_base_percentage
+  + OPS
+  + Batting_average
+
+* The strikeout rate was calculated based on the **9th** inning.
+  + ERA
+  + Strikeout_rate
+  + WHIP
+  
+```{r newvariables-data, echo=FALSE}
+# round up the decimal point according to the variable characteristic.
+
+ dftrain_new<- dftrain %>% 
+  mutate(OBP = round((BATTING_H + BATTING_BB + BATTING_HBP) / 
+           (6167), 3),
+         SLG = round((BATTING_H + 2 * BATTING_2B + 3 * BATTING_3B + 4 * BATTING_HR) / 6167, 3),
+         OPS = round(OBP + SLG, 3),
+         BA= round(BATTING_H / 6167, 3),
+         ERA = round((PITCHING_HR * 9) / (PITCHING_H / 3), 3),
+         K = round(BATTING_SO / (BATTING_H / 9), 3),
+         WHIP = round((PITCHING_BB + PITCHING_H) / PITCHING_SO, 2))
+         #Hitting_Efficiency = round(BATTING_H / (BATTING_H + BATTING_SO), 3),
+         #Base_Running_Efficiency = round(BASERUN_SB / (BASERUN_SB + BASERUN_CS), 3),
+
+summary(dftrain_new)
+```
+
+```{r}
+#dftrain$BATTING_HR_bucket <- cut(dftrain$BATTING_HR, breaks = c(0, 10, 20, 30, 40, 50, max(dftrain$BATTING_HR)), labels = c("0-10", "10-20", "20-30", "30-40", "40-50", "50+"))
+```
+### 2.5 Data Transformation
+
+One possible way to transform ERA and WHIP data to have a positive correlation is to take the reciprocal of each variable, as lower values of ERA and WHIP are associated with better performance.
+
+I created three new variables in dftrain dataset, **ERA_inverse** and **WHIP_inverse**.
+
+1 / dftrain$ERA creates a new column in the dftrain data frame called ERA_inverse, which is the result of taking the reciprocal of the ERA column.
+
+```{r inverse-data, echo=FALSE}
+dftrain_new$ERA_inverse <- 1 / dftrain_new$ERA
+dftrain_new$WHIP_inverse <- 1 / dftrain_new$WHIP
+
+```
+## 3. BUILD MODELS
+
+### Model 1
+Chose single variable to predict the wins. The team's batting home run average is 100. If the team hits 30 more home runs. Teams with 130 home runs will have 82 predicted wins. 
+```{r p1-data, echo=FALSE}
+p1 <- data.frame(c(130))
+                
+colnames(p1) <- c("BATTING_HR")
+```
+Team batting Homerun average is 100. If the team hits 30 more homeruns. Team will 
+
+```{r}
+cor(dftrain_new$TARGET_WINS, dftrain_new$BATTING_HR)
+```
+
+```{r lm1-data, echo=FALSE}
+model1 <- lm(TARGET_WINS ~ BATTING_HR,  data = dftrain_new)
+summary(model1)
+```
+
+```{r}
+predict(model1, newdata = p1)
+```
+
+```{r residuals1-data, echo=FALSE}
+# Residuals
+#residuals <- residuals(model1)
+
+# Residual QQ Plot
+#ggplot(data.frame(residuals), aes(sample = residuals)) + 
+  #stat_qq() + 
+  #ggtitle("Residual QQ Plot") + 
+  #theme_minimal()
+
+# Histogram with density
+#x <- dftrain_new$BATTING_HR
+#hist(x,  probability = TRUE, col = "skyblue",  main = "Histogram with Density Plot")
+#ines(density(x), col = "red", lwd = 2)
+
+#plot_grid(p1, p2, ncol = 2, nrow = 1, align = "h")
+```
+
+### Model 2
+
+Chose **OPS**, **BA**, **ERA**, **K**, **WHIP** without any inversed data. 
+
+0.800 OPS, 0.28 BA, 1.5 ERA, 9.2 K and 1.334 WHIP will have 88 predicted wins. 
+
+```{r p2-data, echo=FALSE}
+p2 <- data.frame(c(0.800),
+                 c(0.280),
+                 c(1.5),
+                 c(9.200),
+                 c(1.334))
+                
+colnames(p2) <- c("OPS", "BA","ERA", "K", "WHIP")
+```
+
+```{r lm2-data, echo=FALSE}
+# replace 'Infinate' values with NA
+dftrain_new$WHIP[is.infinite(dftrain_new$WHIP)] <- NA
+
+model2 <- lm(TARGET_WINS ~ OPS + BA + ERA + K + WHIP,  data = na.omit(dftrain_new))
+summary(model2)
+```
+
+```{r}
+predict(model2, newdata = p2)
+```
+
+In this case, a negative coefficient for ERA, K, and WHIP means that, holding all other variables constant, an increase in ERA or K or WHIP is associated with a decrease in the number of wins. This may seem counterintuitive because in general, having a lower ERA and WHIP and higher K is better for a pitcher and would seem to lead to more wins. However, it's possible that other factors that are not included in the model (such as the quality of the team's defense or run support) are influencing the relationship between ERA/K/WHIP and wins in a way that is not captured by the model. Additionally, it's important to remember that correlation does not necessarily imply causation, and while these variables may be correlated with winning, there may be other factors that are more strongly predictive of wins.
+
+### Model 3
+
+chose **OBP**, **SLG**, **BA**, **ERA_inverse**, **K**, **WHIP** to predict the wins.  
+
+0.400 OBP, 0.417 SLG, 0.280 BA, 1.5 ERA, 9.2 K and 1.334 WHIP will have 94 predicted wins. 
+
+```{r p3-data}
+p3 <- data.frame(c(0.400),
+                 c(0.416),
+                 c(0.280),
+                 c(0.667), #1/1.5
+                 c(9.200),
+                 c(1.334)) 
+                
+colnames(p3) <- c("OBP","SLG","BA","ERA_inverse","K","WHIP")
+```
+
+```{r cor3-data}
+#cor(dftrain_new$TARGET_WINS, OBP, SLG, OPS, BA, ERA_inverse, K, WHIP)
+```
+
+```{r lm3-data}
+# replace 'Infinate' values with NA
+dftrain_new$OPS[is.infinite(dftrain_new$OPS)] <- NA
+dftrain_new$ERA_inverse[is.infinite(dftrain_new$ERA_inverse)] <- NA
+dftrain_new$K[is.infinite(dftrain_new$K)] <- NA
+
+model3 <- lm(TARGET_WINS ~ OBP + SLG + BA + ERA_inverse + K + WHIP,  data = na.omit(dftrain_new))
+summary(model3)
+```
+
+```{r predict3-data}
+predict(model3, newdata = p3)
+```
+
+## 4. SELECT MODELS
+
+Since model 1 has only one value, I will exclude model 1 from my selection. I will choose to use Model 3.
+
+To determine which model is better, we can compare their goodness-of-fit measures. One commonly used measure is the adjusted R-squared, which takes into account the number of predictors in the model. Another measure is the residual standard error (RSE), which estimates the standard deviation of the errors in the model.
+
+Comparing the two models, I can see that Model 3 has a slightly higher adjusted R-squared value (0.2068) than Model 2 (0.2019). This suggests that Model 3 explains a slightly greater proportion of the variance in the response variable (TARGET_WINS).
+
+Furthermore, the residual standard error of Model 3 (13.49) is slightly smaller than that of Model 2 (13.71). This suggests that the errors in Model 3 are slightly smaller, on average, than the errors in Model 2.
+
+Therefore, based on these measures, I can say that Model 3 is slightly better than Model 2. 
+
+
+
+
+
